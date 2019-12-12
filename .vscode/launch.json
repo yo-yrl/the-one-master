@@ -1,0 +1,35 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "java",
+            "name": "Debug (Launch) - Current File",
+            "request": "launch",
+            "mainClass": "${file}"
+        },
+        {
+            "type": "java",
+            "name": "Debug (Launch)-DTNSim<the-one-master>",
+            "request": "launch",
+            "mainClass": "core.DTNSim",
+            "projectName": "the-one-master"
+        },
+        {
+            "type": "java",
+            "name": "Debug (Launch)-Main<the-one-master>",
+            "request": "launch",
+            "mainClass": "fi.tkk.netlab.dtn.ecla.Main",
+            "projectName": "the-one-master"
+        },
+        {
+            "type": "java",
+            "name": "Debug (Launch)-Main<the-one-master>(1)",
+            "request": "launch",
+            "mainClass": "org.netlab.dtn.ecla.Main",
+            "projectName": "the-one-master"
+        }
+    ]
+}
