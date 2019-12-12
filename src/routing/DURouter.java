@@ -9,6 +9,8 @@ public class DURouter extends ActiveRouter  {
 	public static final String DURouter_NS = "DURouter";
 	
 	//输入参数：
+	public int privIndex = 0;
+	public Random privSeed = new Random();
 	// 数据到来期望
 	public static final String DataArrival = "DataArrival";
 	public int expectedDataArrival = 0; //数据到来量的期望，均匀分布
@@ -33,10 +35,14 @@ public class DURouter extends ActiveRouter  {
 		}else {
 			DU_QueueLength = 0;
 		}
+		this.privSeed.setSeed(++this.privIndex);
 	}
 	
 	protected DURouter(DURouter r) {
 		super(r);
+		this.privIndex = ++r.privIndex;
+		this.privSeed.setSeed(this.privIndex);
+		
 		this.DU_QueueLength = r.DU_QueueLength;
 		this.expectedDataArrival = r.expectedDataArrival;
 		
@@ -51,9 +57,9 @@ public class DURouter extends ActiveRouter  {
 	@Override
 	public void update() {
 		super.update();
-		Random r = new Random();
-		r.setSeed(this.getHost().getAddress());
-		DU_QueueLength += r.nextDouble() * this.expectedDataArrival * 2;
+		//Random r = new Random();
+		//r.setSeed(this.getHost().getAddress());
+		DU_QueueLength += this.privSeed.nextDouble() * this.expectedDataArrival * 2;
 	}
 	
 	public void updateByCU(double size){
