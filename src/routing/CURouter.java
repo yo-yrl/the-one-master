@@ -17,6 +17,7 @@ public class CURouter extends ActiveRouter  {
 	public static final String CURouter_NS = "CURouter";
 	
 	//输入变量
+	public int privIndex = 0;
 	public Random privSeed = new Random();
 	//public static final String CapacityFileDir = "CapacityFileDir";
     public String CapFileDir = "./ICDCS_Data/defaultCapacityOfCU.txt";
@@ -79,14 +80,20 @@ public class CURouter extends ActiveRouter  {
 		
 		// 设置种子
 		//System.out.println(this.getHost().getAddress());
-		this.privSeed.setSeed(1);
+		this.privSeed.setSeed(++this.privIndex);
 	}
 	
 	protected CURouter(CURouter r) {
 		super(r);
 		this.CapacityPool = r.CapacityPool;
-		//System.out.println(this.getHost().getAddress());
-		this.privSeed.setSeed(this.getHost().getAddress()+1);
+		this.privIndex = r.privIndex ++;
+		//System.out.println(this.privIndex);
+		this.privSeed.setSeed(this.privIndex);
+//		if(this.getHost().getAddress() > 0) {
+//			System.out.println("wrong!");
+//		}else {
+//			this.privSeed.setSeed(this.getHost().getAddress()+1);
+//		}
 		
 		this.QueuesForDUs = new HashMap<>();
 		this.DU_Rates = new HashMap<>();
