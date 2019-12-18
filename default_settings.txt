@@ -1,7 +1,9 @@
 #Scenario
 Scenario.name = CCD_scenario
 Scenario.simulateConnections = true
-Scenario.updateInterval = 0.5
+###############################更新周期
+Scenario.updateInterval = 0.5 
+###############################仿真时长
 Scenario.endTime = 10000
 
 # Interface Settings
@@ -12,7 +14,7 @@ Interface.transmitRange = 10000000
 # DU group, CU group, CN group
 Scenario.nrofHostGroups = 3
 
-#DU group
+#-------------------------------------------------------------------------------------DU group
 Group1.groupID = D
 Group1.movementModel = ShortestPathMapBasedMovement
 Group1.speed = 0, 0
@@ -21,15 +23,17 @@ Group1.nrofInterfaces = 1
 Group1.interface1 = Interface
 
 Group1.router = DURouter 
+##################################DU num
 Group1.nrofHosts = 20
-# int
-DURouter.DataArrival = 10
-# Double
-DURouter.InitQueueLen = 10.0
+#################################一列double值, 代表 数据到来速率 池, 数值用逗号隔开 --To do
+DURouter.DataArrivalRatePool = 100, 300
+# ###############################mu_queuelen --To do
+DURouter.Init_muQueueLen = 10.0
+################################epsilon 随机梯度更新步长
+DURouter.Epsilon = 0.001
 
 
-
-#CU group
+#-------------------------------------------------------------------------------------CU group
 Group2.groupID = C
 Group2.movementModel = ShortestPathMapBasedMovement
 Group2.speed = 0, 0
@@ -37,11 +41,16 @@ Group2.speed = 0, 0
 Group2.nrofInterfaces = 1
 Group2.interface1 = Interface
 Group2.router = CURouter
+###############################CU num
 Group2.nrofHosts = 5
-# CapFiledir
-#CURouter.CapacityFileDir = "./defaultCapacityOfCU.txt"
+###############################Omega
+CURouter.Omega = 0.8 
+###############################最大计算能力 --To do
+CURouter.MaxCapacityPool = 100
 
-#CN group
+
+
+#-------------------------------------------------------------------------------------CN group
 Group3.groupID = N
 Group3.movementModel = ShortestPathMapBasedMovement
 Group3.speed = 0, 0
@@ -50,13 +59,21 @@ Group3.nrofInterfaces = 1
 Group3.interface1 = Interface
 
 Group3.router = CNRouter 
-
 Group3.nrofHosts = 1
+
+################################rho ：cycles/sec  --To do
+CNRouter.App_rho = 12
+################################Group1.nrofHosts DU个数
+CNRouter.DU_Num = 20
+################################Group2.nrofHosts CU个数
+CNRouter.CU_Num = 5
+
 
 ## Movement model settings
 # seed for movement models' pseudo random number generator (default = 0)
 MovementModel.rngSeed = 1
 # World's size for Movement Models without implicit size (width, height; meters)
+###################################图多大 --To do
 MovementModel.worldSize = 4500, 3400
 
 ## Message creation parameters
@@ -64,14 +81,14 @@ MovementModel.worldSize = 4500, 3400
 Events.nrof = 0
 
 
-
 ## Reports - all report names have to be valid report classes
 Report.nrofReports = 1
 # length of the warm up period (simulated seconds)
 Report.warmup = 0
 Report.reportDir = reports/
+##################################报告类对象 目录
 Report.report1 = MessageStatsReport 
-# To do!!! 
+
 
 ## Optimization settings -- these affect the speed of the simulation
 ## see World class for details.

@@ -84,7 +84,7 @@ public abstract class MessageRouter {
 	/** Maximum Ttl value */
 	public static final int MAX_TTL_VALUE = 35791394;
 
-	private List<MessageListener> mListeners;
+	public List<MessageListener> mListeners;
 	/** The messages being transferred with msgID_hostName keys */
 	private HashMap<String, Message> incomingMessages;
 	/** The messages this router is carrying */
