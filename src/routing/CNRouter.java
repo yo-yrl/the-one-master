@@ -5,7 +5,6 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.FileWriter;
-import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
@@ -24,11 +23,11 @@ import report.MessageStatsReport;
 
 public class CNRouter extends ActiveRouter {
 
-	// 输入参数--------------------------------------------------
+	// 输入参数--------------------------------------------------!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!记得改这儿的
 	public static final String CNRouter_NS = "CNRouter";
 
 	public static final String RHO = "App_rho";
-	public int rho = 0;
+	public double rho = 0;
 
 	public static final String DU_NUM = "DU_Num";
 	public int du_num = 0;
@@ -36,7 +35,8 @@ public class CNRouter extends ActiveRouter {
 	public static final String CU_NUM = "CU_Num";
 	public int cu_num = 0;
 	
-	double obj_function;  //保存目标函数值
+	public double obj_function;  //保存目标函数值
+	
 	// ----------------------------------------------------------------------------------------------
 	MessageStatsReport msr;
 	public boolean init = true;    
@@ -47,15 +47,14 @@ public class CNRouter extends ActiveRouter {
 		super(s);		
 		Settings RhoSettings = new Settings(CNRouter_NS);
 		if (RhoSettings.contains(RHO)) 
-			rho = RhoSettings.getInt(RHO);		
+			rho = RhoSettings.getDouble(RHO);		
 		
 		if (RhoSettings.contains(DU_NUM)) 
 			du_num = RhoSettings.getInt(DU_NUM);	
 		
 		if (RhoSettings.contains(CU_NUM)) 
-			cu_num = RhoSettings.getInt(CU_NUM);
-		
-		obj_function = 0;
+			cu_num = RhoSettings.getInt(CU_NUM);		
+		obj_function = 0.0;
 	}
 
 	public CNRouter(CNRouter r) {
@@ -78,10 +77,9 @@ public class CNRouter extends ActiveRouter {
 		super.update();
 		if(this.init)
 		{
-			this.msr = (MessageStatsReport) mListeners.get(0);
+			this.msr = (MessageStatsReport) this.mListeners.get(0);
 			this.init=false;
 		}
-		
 		World w = SimScenario.getInstance().getWorld();
 		ArrayList<DTNHost> host_list = (ArrayList<DTNHost>) w.getHosts();
 		
@@ -94,11 +92,12 @@ public class CNRouter extends ActiveRouter {
 			e.printStackTrace();
 		}
 		updateP1_Final(host_list, connNum);
+		this.msr.update();//保存日志
 	}
 	
     //*******************************************P1_ours**************************************************
 	private void P1_Ours(ArrayList<DTNHost> host_list, HashMap<Integer, Integer> connNum) {
-		String P1_biMatching_FilePath = ".\\src\\routing\\py_Matching\\P1_Ours_GraphInfo.txt";
+		String P1_biMatching_FilePath="F:\\eclipse-workbench\\the-one-master\\src\\routing\\py_Matching\\P1_Ours_GraphInfo.txt";
 		PrintWriter pw = null;
 		try {
 			pw = new PrintWriter(new FileWriter(P1_biMatching_FilePath));
@@ -106,127 +105,142 @@ public class CNRouter extends ActiveRouter {
 			e.printStackTrace();
 		}
 		StringBuffer sb = new StringBuffer();
-		// 二分图节点数 不需要
-		//int totalNum = this.du_num * this.cu_num + this.du_num;
-		//sb.append(totalNum + "\n");
+
 		double r = 0;
-		// 构造二分图的边
+		// ------将二分图的边,权重  存入文件------
 		for (int du = 0; du < this.du_num; du++)
-			for (int cu = 0; cu < this.cu_num; cu++)
-				for (int k = 1; k <= this.du_num; k++) {
-					sb.append(du + " " + cu + "k" + k);
-					DTNHost du_host = host_list.get(du);
-					DURouter du_router = (DURouter) du_host.getRouter();
-					DTNHost cu_host = host_list.get(cu + this.du_num);
-					CURouter cu_router = (CURouter) cu_host.getRouter();
-					r = cu_router.DU_Rates.get(du_host) * (du_router.mu_QueueLength
-							- cu_router.eta_QueueLength.get(du_host) - cu_router.DU_CU_Trans_Cost.get(du_host));
-					r = Math.log(Math.pow(k - 1, k - 1) * r / Math.pow(k, k));
+			for (int cu = 0; cu < this.cu_num; cu++) {//每个cu被复制du_num份
+				DTNHost du_host = host_list.get(du);
+				DURouter du_router = (DURouter) du_host.getRouter();
+				DTNHost cu_host = host_list.get(cu + this.du_num);
+				CURouter cu_router = (CURouter) cu_host.getRouter();
+				r = cu_router.DU_Rates.get(du_host) * (du_router.mu_QueueLength
+						- cu_router.eta_QueueLength.get(du_host) - cu_router.DU_CU_Trans_Cost.get(du_host));
+				if(r <= 0)
+					continue;
+				for (int k = 1; k <= this.du_num; k++) {		
+																	
+					r = Math.log(Math.pow(k - 1, k - 1) * r / Math.pow(k, k));					
 					if (r <= 0)
-						r = 0;
+						break;
+					sb.append(du + " " + cu + "k" + k);
 					sb.append(" " + format(r) + "\n");
 				}
+			}
 		pw.println(sb.toString());
-		// 调用python的二分图匹配
-		Process proc = null;
-		try {
-			//String[] args = new String[] {"python3"," F:\\eclipse-workbench\\the-one-master\\src\\routing\\py_Matching\\bipartiteMatch.py", P1_biMatching_FilePath};
-			String exe_cmd = "python3  F:\\eclipse-workbench\\the-one-master\\src\\routing\\py_Matching\\bipartiteMatch.py  ";			
-			proc = Runtime.getRuntime()
-					.exec(exe_cmd.concat(P1_biMatching_FilePath));
-			// 用输入输出流来截取结果
-			BufferedReader in = new BufferedReader(new InputStreamReader(proc.getInputStream()));
+		pw.close();
+		
+		//  ------调用python的二分图匹配算法 ------
+		Process proc_p1 = null;
+		try {			
+			String[] args1 = new String[] {"python3", "F:\\eclipse-workbench\\the-one-master\\src\\routing\\py_Matching\\bipartiteMatch.py", P1_biMatching_FilePath};
+			proc_p1 = Runtime.getRuntime().exec(args1);
+			// ·····用输入输出流来截取结果
+			BufferedReader in = new BufferedReader(new InputStreamReader(proc_p1.getInputStream()));
 			String line = null;
 			while ((line = in.readLine()) != null) {
+				System.out.print("DU-CU:");
 				System.out.println(line);
-				line.trim();
-				line = line.replace("(", "");
-				line = line.replace(")", "");
-				line = line.replace("{", "");
-				line = line.replace("}", "");
-				line = line.replace(" ", "");
+				if(line.contains("py_Matching"))
+					continue;
+				if(!line.contains(")}"))
+					continue;			
+				line.trim();line = line.replace(" ", "");
+				line = line.replace("(", "");	line = line.replace(")", "");
+				line = line.replace("{", "");line = line.replace("}", "");		
+				line = line.replace("'", "");
+						
+				//·····处理匹配结果
 				String[] points = line.split(",");
-
 				int firstNode, secondNode;
 				for (int i = 0; i < points.length; i += 2) {
 					if (points[i].contains("k")) {
+						//'du_id'  'cu_id  k  du_id'
 						String[] split = points[i].split("k");
-						firstNode = Integer.valueOf(split[0]);
-						if (!connNum.containsKey(firstNode))
+						firstNode = Integer.valueOf(split[0]);// cu_id
+						if (!connNum.containsKey(firstNode))//存储连接该cu的du数目
 							connNum.put(firstNode, Integer.valueOf(split[1]));
 						else if (connNum.get(firstNode) < Integer.valueOf(split[1]))
 							connNum.put(firstNode, Integer.valueOf(split[1]));
-						secondNode = Integer.valueOf(points[i + 1]);
-						updateP1(firstNode, secondNode, host_list);
+						
+						secondNode = Integer.valueOf(points[i + 1]);//du_id
+						updateP1(firstNode, secondNode, host_list);//(cuId, duId, host_list)
+						
 					} else {
-						firstNode = Integer.valueOf(points[i]);
+						firstNode = Integer.valueOf(points[i]);//du_id
 						String[] split = points[i + 1].split("k");
-						secondNode = Integer.valueOf(split[0]);
+						secondNode = Integer.valueOf(split[0]);//cu_id
 						if (!connNum.containsKey(secondNode))
 							connNum.put(secondNode, Integer.valueOf(split[1]));
 						else if (connNum.get(secondNode) < Integer.valueOf(split[1]))
 							connNum.put(secondNode, Integer.valueOf(split[1]));
-						updateP1(secondNode, firstNode, host_list);
+						updateP1(secondNode, firstNode, host_list);//(cuId, duId, host_list)
 					}
 				}
 			}
 			in.close();
-			proc.waitFor();
+			proc_p1.waitFor();
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
 	}
 	
- //-------------------------------------------------p1 update-------------------------------------------------------
+ 
+	//-------------------------------------------------p1 update functions-------------------------------------------------------
+	//-------------更新alpha_ij(du连cu)------------
 	private void updateP1(int CuNode, int DuNode, ArrayList<DTNHost> host_list) {
 		DTNHost du_host = host_list.get(DuNode);
 		DTNHost cu_host = host_list.get(CuNode + this.du_num);
 		CURouter cu_router = (CURouter) cu_host.getRouter();
 		cu_router.DU_Alpha.put(du_host, 1);
 	}
+	//-------------更新theta_ij(分时)------计算du2cu传输代价----将alpha清空为0------
 	private void updateP1_Final(ArrayList<DTNHost> host_list, HashMap<Integer, Integer> connNum) {
 		for (int cu = 0; cu < this.cu_num; cu++)
 			for (int du = 0; du < this.du_num; du++) {
 				DTNHost du_host = host_list.get(du);
 				DTNHost cu_host = host_list.get(cu + this.du_num);
+				
 				CURouter cu_router = (CURouter) cu_host.getRouter();
 				if (cu_router.DU_Alpha.get(du_host) == 1) {
-					cu_router.DU_Theta.put(du_host, 1.0 / connNum.get(cu));
+					cu_router.DU_Theta.put(du_host, 1.0 / connNum.get(cu));//--theta
+					this.msr.update_du2cuData(cu_router, (DURouter) du_host.getRouter(), 1.0 / connNum.get(cu)*cu_router.DU_Rates.get(du_host));
 					cu_router.GetDataFromDU(du_host);
-					obj_function += cu_router.DU_CU_Trans_Cost.get(du_host) / connNum.get(cu) * cu_router.DU_Rates.get(du_host);
+					// --du 2 cu 传输代价：速率*代价*占比
+					obj_function += cu_router.DU_CU_Trans_Cost.get(du_host) / connNum.get(cu) 
+							                                   * cu_router.DU_Rates.get(du_host);
 					cu_router.DU_Alpha.put(du_host, 0);   //清空alpha
+					
 				}
 			}
 	}
 	//--------------------------------------------------------------------------------------------------------
 	//***************************************End P1_ours**************************************************
 	
+	
 	//*******************************************P2_ours**************************************************
 	@SuppressWarnings({ "resource" })
 	private void P2_Ours(ArrayList<DTNHost> host_list) throws Exception {
 		PrintWriter pw = null;
-		String P2_Matching_FilePath = ".\\src\\routing\\py_Matching\\P2_Ours_GraphInfo.txt";
+		String P2_Matching_FilePath="F:\\eclipse-workbench\\the-one-master\\src\\routing\\py_Matching\\P2_Ours_GraphInfo.txt";
 		try {
 			pw = new PrintWriter(new FileWriter(P2_Matching_FilePath));
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
 		StringBuffer sb = new StringBuffer();
-		// 图节点数
-		//int totalNum = this.cu_num * 2;
-		//sb.append(totalNum + "\n");
-		double r = 0;
 		
+		double r = 0;		
 		HashMap<CURouter, double[]> self_X = new HashMap<>();
-		
-		//自己连自己-------------------------------------------------------------------------------------
+		HashMap<CURouter, Double> self_obj = new HashMap<>();
+		//-------------------------------------------自己连自己的边 ------------------------------------------
 		for (int self_cu = 0; self_cu < this.cu_num; self_cu++) {
 			DTNHost self_cu_host = host_list.get(self_cu + this.du_num);
 			CURouter self_cu_router = (CURouter) self_cu_host.getRouter();
-			getP2_X_Param(self_cu_router);
-			sb.append(self_cu + " " + "m" + self_cu);
+			getP2_X_Param(self_cu_router);//对X_param进行赋值
+			
 
-			// 调用AMPL----------P1   固定j，y系数为0   m max sum(ax)--------------------
+			// ------调用AMPL-P1   固定j  求解 max sum(a*x)-----
 			String p1_ampl_modFilePath = ".\\src\\routing\\ampl_ModDat\\P1_model.mod";
 			String p1_ampl_datFilePath = ".\\src\\routing\\ampl_ModDat\\p1.dat";
 			px_outTodat(self_cu_router, p1_ampl_datFilePath);
@@ -236,40 +250,40 @@ public class CNRouter extends ActiveRouter {
 			ampl_p1.read(p1_ampl_modFilePath);
 			ampl_p1.readData(p1_ampl_datFilePath);
 			ampl_p1.solve();
-			// 获取返回值
-			// 获取x_ij--->x_j[i]
-			Objective obj = ampl_p1.getObjective("p1_obj");
+			
+			// ------获取 object  & x_ij--->x_j[i]------			
 			Variable xij_Var = ampl_p1.getVariable("x_ij");
-			//double[] x_j = new double[this.du_num];
 			self_X.put(self_cu_router, new double[this.du_num]);
 			getOneDimensionVarFromAmpl(xij_Var, self_X.get(self_cu_router));
-			// ------------------------------------------------------------------
-			r = obj.value();
-			// 需要返回结果给r赋值
+			
+			Objective obj = ampl_p1.getObjective("p2X_obj");
+			r = obj.value(); 
 			if (r <= 0)
+			{
 				r = 0;
-			sb.append(" " + format(r) + "\n");
+				self_obj.put(self_cu_router, r);
+				continue;
+			}
+			else
+			{
+				self_obj.put(self_cu_router, r);
+				sb.append(self_cu + " " + "m" + self_cu + " " + format(r) + "\n");
+			}
 		}
 		
-		HashMap<CURouter, double[]> Conn_X = new HashMap<>();
-		
-		//CU连不同CU---------------------------------------------------------------------
+		//-----------------------CU连不同CU的边 ----------------------------------------------
+		HashMap<CURouter, double[]> Conn_X = new HashMap<>();				
 		for (int sent_cu = 0; sent_cu < this.cu_num; sent_cu++)
 			for (int recv_cu = sent_cu + 1; recv_cu < this.cu_num; recv_cu++) {
 				if (sent_cu == recv_cu)
 					continue;
-
-				DTNHost sent_cu_host = host_list.get(sent_cu + this.du_num);
-				CURouter sent_cu_router = (CURouter) sent_cu_host.getRouter();				
-				DTNHost recv_cu_host = host_list.get(recv_cu + this.du_num);
-				CURouter recv_cu_router = (CURouter) recv_cu_host.getRouter();
+				CURouter sent_cu_router = (CURouter) host_list.get(sent_cu + this.du_num).getRouter();				
+				CURouter recv_cu_router = (CURouter) host_list.get(recv_cu + this.du_num).getRouter();
 				
-				getP2_X_Param(sent_cu_router);
+				getP2_X_Param(sent_cu_router);	
 				getP2_X_Param(recv_cu_router);
-				getP2_Y_Param(sent_cu_router, recv_cu_router);
+				getP2_Y_Param(sent_cu_router, recv_cu_router);	
 				getP2_Y_Param(recv_cu_router, sent_cu_router);
-
-				sb.append(sent_cu + " " + recv_cu);
 				
 				// 调用AMPL-----------P2  固定j,k    max sum(ax+by)------------------------
 				String p2_ampl_modFilePath = ".\\src\\routing\\ampl_ModDat\\P2_model.mod";
@@ -294,121 +308,147 @@ public class CNRouter extends ActiveRouter {
 				Variable yijk_Var = ampl_p2.getVariable("y_ijk");
 				double[] y_jk = new double[this.du_num];
 				getOneDimensionVarFromAmpl(yijk_Var, y_jk);
-				int duID = 0;
-				for(double dd : y_jk) sent_cu_router.CU_Y.get(recv_cu_router.getHost()).put(host_list.get(duID++), dd);
+				int duID = 0;//更新CU_Y_ijk
+				for(double dd : y_jk) 
+					sent_cu_router.CU_Y.get(recv_cu_router.getHost()).put(host_list.get(duID++), dd);
 				// 获取y_ikj--->y_kj[i]
 				Variable yikj_Var = ampl_p2.getVariable("y_ikj");
 				double[] y_kj = new double[this.du_num];
 				getOneDimensionVarFromAmpl(yikj_Var, y_kj);
-				duID = 0;
-				for(double dd : y_kj) recv_cu_router.CU_Y.get(sent_cu_router.getHost()).put(host_list.get(duID++), dd);
+				duID = 0;//更新CU_Y_ikj
+				for(double dd : y_kj) 
+					recv_cu_router.CU_Y.get(sent_cu_router.getHost()).put(host_list.get(duID++), dd);
 				// ------------------------------------------------------------------
-				Objective obj = ampl_p2.getObjective("p2_obj");
-				 r = obj.value();
 				// 需要返回结果给r赋值
-				if (r <= 0)
+				Objective obj = ampl_p2.getObjective("p2Y_obj");
+				 r = obj.value();
+				 double tmp = self_obj.get(sent_cu_router) + self_obj.get(recv_cu_router);
+				if (r <= 0 || tmp == r)
+				{
 					r = 0;
-				sb.append(" " + format(r) + "\n");
-			}		
+					continue;
+				}
+				sb.append(sent_cu + " " + recv_cu + " " + format(r) + "\n");
+			}
+		sb.append("end");
 		pw.println(sb.toString());
 		pw.close();
-		// 调用python的图匹配
-		Process proc = null;
-		try {
-			//String[] args = new String[] {"python3"," F:\\eclipse-workbench\\the-one-master\\src\\routing\\py_Matching\\bipartiteMatch.py", P1_biMatching_FilePath};
-			String exe_cmd = "python3  F:\\eclipse-workbench\\the-one-master\\src\\routing\\py_Matching\\bipartiteMatch.py  ";			
-			proc = Runtime.getRuntime()
-					.exec(exe_cmd.concat(P2_Matching_FilePath));
+		// ------ 调用python的图匹配 ------
+		Process proc_p2 = null;
+		try {			
+			String[] args1 = new String[] {"python3","F:\\eclipse-workbench\\the-one-master\\src\\routing\\py_Matching\\graphMatch.py",P2_Matching_FilePath};
+			proc_p2 = Runtime.getRuntime().exec(args1);
 			// 用输入输出流来截取结果
-			BufferedReader in = new BufferedReader(new InputStreamReader(proc.getInputStream()));
+			BufferedReader in = new BufferedReader(new InputStreamReader(proc_p2.getInputStream()));
 			String line = null;
 			while ((line = in.readLine()) != null) {
-				//System.out.println("----------*************");
 				System.out.println(line);
-				if(line.equals("set()"))continue;
-				line.trim();
-				line = line.replace("(", "");
-				line = line.replace(")", "");
-				line = line.replace("{", "");
-				line = line.replace("}", "");
-				line = line.replace(" ", "");
-				String[] points = line.split(",");
-				
-				int selfNode, firstNode, secondNode;
-				System.out.println(points.length);
-				System.out.println("----------*************");
+				if(line.contains("py_Matching"))
+					continue;
+				if(!line.contains(")}"))
+					continue;
+				line.trim();line = line.replace(" ", "");
+				line = line.replace("(", "");	line = line.replace(")", "");
+				line = line.replace("{", "");line = line.replace("}", "");
+				line = line.replace("'", "");
+				//获取返回结果
+				String[] points = line.split(",");				
+				int selfNode, firstNode, secondNode;				
 				for (int i = 0; i < points.length; i += 2) {
+					//------------------------- CU自己算，不与其他人合作 -------------------------
+					//------ 更新CU_X,  CalculateDUByItself(),  obj_function累积 ------
 					if (points[i].contains("m")) {
+						//'cu '  ' m cu_itself '
 						selfNode = Integer.valueOf(points[i+1]);
 						CURouter cu_router = (CURouter) host_list.get(selfNode+this.du_num).getRouter();
 						for(int duID = 0; duID < self_X.get(cu_router).length; duID++)
 						{	
 							cu_router.CU_X.put(host_list.get(duID), self_X.get(cu_router)[duID]);
 						    cu_router.CalculateDUByItself(host_list.get(duID));
+						    //自己算代价：算力开销* rho * 样本个数
 						    obj_function += cu_router.CU_Cal_Cost * this.rho * self_X.get(cu_router)[duID];
-						}
-						
-					} 
+						    this.msr.update_xSelf(cu_router,(DURouter) host_list.get(duID).getRouter(),self_X.get(cu_router)[duID]);
+						    //System.out.println("obj_function");
+						    this.msr.update_xy(cu_router, (DURouter) host_list.get(duID).getRouter(), self_X.get(cu_router)[duID]);
+						}						
+					}else
 					if (points[i+1].contains("m")) {
+						// ' cu '  'm cu_itself '
 						selfNode = Integer.valueOf(points[i]);
 						CURouter cu_router = (CURouter) host_list.get(selfNode+this.du_num).getRouter();
 						for(int duID = 0; duID < self_X.get(cu_router).length; duID++)
 						{
 							cu_router.CU_X.put(host_list.get(duID), self_X.get(cu_router)[duID]);
 							cu_router.CalculateDUByItself(host_list.get(duID));
+							//自己算代价：算力开销* rho * 样本个数
 							obj_function += cu_router.CU_Cal_Cost * this.rho * self_X.get(cu_router)[duID];
+							this.msr.update_xSelf(cu_router, (DURouter) host_list.get(duID).getRouter(), self_X.get(cu_router)[duID]);
+							this.msr.update_xy(cu_router, (DURouter) host_list.get(duID).getRouter(), self_X.get(cu_router)[duID]);
 						}
 					}
 					else {
+						//------------------------- CU自己算，且合作 -------------------------
 						firstNode = Integer.valueOf(points[i]);
 						secondNode = Integer.valueOf(points[i+1]);
 						CURouter cu_router_first = (CURouter) host_list.get(firstNode+this.du_num).getRouter();
 						CURouter cu_router_second = (CURouter) host_list.get(secondNode+this.du_num).getRouter();
+						DTNHost cu_First_Host = cu_router_first.getHost();
+						DTNHost cu_Second_Host = cu_router_second.getHost();
 						for(int duID = 0; duID < Conn_X.get(cu_router_first).length; duID++)
-						{
-							DTNHost cu_First_Host = cu_router_first.getHost();
-							DTNHost cu_Second_Host = cu_router_second.getHost();
-							DTNHost du_Host = host_list.get(duID);
-							
+						{							
+							DTNHost du_Host = host_list.get(duID);				
+							// ------ partA:自己算多少 ------ 
 							cu_router_first.CU_X.put(du_Host, Conn_X.get(cu_router_first)[duID]);
 							cu_router_second.CU_X.put(du_Host, Conn_X.get(cu_router_second)[duID]);
-							cu_router_first.CalculateDUByItself(du_Host);
-							obj_function += cu_router_first.CU_Cal_Cost * this.rho * Conn_X.get(cu_router_first)[duID];
+							
+							cu_router_first.CalculateDUByItself(du_Host);							
+							obj_function += cu_router_first.CU_Cal_Cost * this.rho * Conn_X.get(cu_router_first)[duID];	
+							this.msr.update_x(cu_router_first, (DURouter) host_list.get(duID).getRouter(),Conn_X.get(cu_router_first)[duID]);
+							this.msr.update_xy(cu_router_first, (DURouter) host_list.get(duID).getRouter(), Conn_X.get(cu_router_first)[duID]);
 							
 							cu_router_second.CalculateDUByItself(du_Host);
-							obj_function += cu_router_second.CU_Cal_Cost * this.rho * Conn_X.get(cu_router_second)[duID];
+							obj_function += cu_router_second.CU_Cal_Cost * this.rho * Conn_X.get(cu_router_second)[duID];	
+							this.msr.update_x(cu_router_second, (DURouter) host_list.get(duID).getRouter(),Conn_X.get(cu_router_second)[duID]);
+							this.msr.update_xy(cu_router_second, (DURouter) host_list.get(duID).getRouter(), Conn_X.get(cu_router_second)[duID]);
 							
+							
+							// ------partB:互相传 ------ 
+							// 传输代价：传输价格*传送量
 							cu_router_first.SendDataToCU(cu_Second_Host, du_Host);
-							obj_function += cu_router_first.CU_CU_Trans_Cost.get(cu_Second_Host) * (cu_router_first.CU_Y.get(cu_Second_Host).get(du_Host));
-							
-							cu_router_second.SendDataToCU(cu_router_first.getHost(), du_Host);
+							obj_function += cu_router_first.CU_CU_Trans_Cost.get(cu_Second_Host) * (cu_router_first.CU_Y.get(cu_Second_Host).get(du_Host));							
+							cu_router_second.SendDataToCU(cu_router_first.getHost(), du_Host);							
 							obj_function += cu_router_second.CU_CU_Trans_Cost.get(cu_First_Host) * (cu_router_second.CU_Y.get(cu_First_Host).get(du_Host));
-					
+							
+							//计算代价：计算价格*rho*计算量
 							cu_router_first.RecvDataFromCU(cu_router_second.getHost(), du_Host);
 							obj_function += cu_router_first.CU_Cal_Cost * this.rho * (cu_router_second.CU_Y.get(cu_First_Host).get(du_Host));
+							this.msr.update_y(cu_router_first,cu_router_second, (DURouter) du_Host.getRouter(), (cu_router_second.CU_Y.get(cu_First_Host).get(du_Host)));
+							this.msr.update_xy(cu_router_first, (DURouter) du_Host.getRouter(),cu_router_second.CU_Y.get(cu_First_Host).get(du_Host));
 							
 							cu_router_second.RecvDataFromCU(cu_router_first.getHost(), du_Host);
 							obj_function += cu_router_second.CU_Cal_Cost * this.rho * (cu_router_first.CU_Y.get(cu_Second_Host).get(du_Host));
+							this.msr.update_y(cu_router_second,cu_router_first, (DURouter) du_Host.getRouter(), (cu_router_first.CU_Y.get(cu_Second_Host).get(du_Host)));
+							this.msr.update_xy(cu_router_second, (DURouter) du_Host.getRouter(),cu_router_first.CU_Y.get(cu_Second_Host).get(du_Host));
 						}
 					}
 				}
 			}
 			in.close();
-			proc.waitFor();
+			proc_p2.waitFor();
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
-
 	}
 	//---------------------------------------------------------Get  Edge  Weights-----------------------------------------------
-	private void getP2_Y_Param(CURouter sent_cu_router, CURouter recv_cu_router) {
+	private void getP2_Y_Param(CURouter sent_cu_router, CURouter recv_cu_router) {//(j,k)
 		double para_y = 0;
 		for (DTNHost du : sent_cu_router.X_Param.keySet()) {
-			para_y = (-1) * recv_cu_router.CU_Cal_Cost * this.rho 
-					+ sent_cu_router.eta_QueueLength.get(du)
-					- recv_cu_router.lambda_QueueLength.get(du) + recv_cu_router.pi_QueueLength.get(du)
+			para_y = (-1) * recv_cu_router.CU_Cal_Cost * this.rho //C_k * rho
+					+ sent_cu_router.eta_QueueLength.get(du) //eta_ij
+					- recv_cu_router.lambda_QueueLength.get(du) //lambda_ik
+					+ recv_cu_router.pi_QueueLength.get(du) //pi_ik
 					+ recv_cu_router.GetSum_P2();
-			para_y -= sent_cu_router.CU_CU_Trans_Cost.get(recv_cu_router.getHost());
+			para_y -= sent_cu_router.CU_CU_Trans_Cost.get(recv_cu_router.getHost());//C_jk
 			sent_cu_router.Y_Param.get(recv_cu_router.getHost()).put(du, para_y);
 		}
 	}
@@ -418,6 +458,11 @@ public class CNRouter extends ActiveRouter {
 		for (DTNHost du : cu_router.X_Param.keySet()) {
 			para_x = (-1) * cu_router.CU_Cal_Cost * this.rho + cu_router.eta_QueueLength.get(du)
 					- cu_router.lambda_QueueLength.get(du) + cu_router.pi_QueueLength.get(du) + cu_router.GetSum_P2();
+//			System.out.println(Integer.toString(cu_router.getHost().getAddress())+"--"+Integer.toString(du.getAddress()));
+//			
+//			System.out.println(cu_router.CU_Cal_Cost * this.rho);System.out.println(cu_router.eta_QueueLength.get(du));
+//			System.out.println( cu_router.lambda_QueueLength.get(du));System.out.println(cu_router.pi_QueueLength.get(du) );
+//			System.out.println(cu_router.GetSum_P2());System.out.println(para_x);
 			cu_router.X_Param.put(du, para_x);
 		}
 	}
@@ -437,7 +482,7 @@ public class CNRouter extends ActiveRouter {
 			AMPL_basicFuc genData = new AMPL_basicFuc();
 			genData.outTodatOneNumInt(bw, "du_num", this.du_num);
 			genData.outTodatOneNumDouble(bw, "calCap_j", self_cu_router.curCapacity);
-			genData.outTodatOneNumInt(bw, "rho", this.rho);
+			genData.outTodatOneNumDouble(bw, "rho", this.rho);
 			genData.outTodatOneNumDouble(bw, "epsilon_j", self_cu_router.epsilon);
 			double[] x_param = new double[this.du_num];
 			for (DTNHost du : self_cu_router.X_Param.keySet()) {
@@ -445,7 +490,7 @@ public class CNRouter extends ActiveRouter {
 				x_param[du_id] = self_cu_router.X_Param.get(du);
 				if(x_param[du_id] <= 0) x_param[du_id] = 0;
 			}
-			genData.outTodatOneDimensionDouble(bw, "co_param", x_param);
+			genData.outTodatOneDimensionDouble(bw, "co_param", x_param);			
 			double[] eta_param = new double[this.du_num];
 			for (DTNHost du : self_cu_router.eta_QueueLength.keySet()) {
 				int du_id = du.getAddress();
@@ -453,35 +498,12 @@ public class CNRouter extends ActiveRouter {
 			}
 			genData.outTodatOneDimensionDouble(bw, "eta", eta_param);
 			bw.append("end;").append("\r");
-//			osw.write(bw.toString());
-//			out.flush();
+
+			bw.close();bw=null;
+			osw.close();osw=null;
+			out.close();out=null;
 		} catch (Exception e) {
 			e.printStackTrace();
-		}finally{
-			if(bw!=null){
-				try {
-					bw.close();
-					bw=null;
-				} catch (IOException e) {
-					e.printStackTrace();
-				} 
-			}
-			if(osw!=null){
-				try {
-					osw.close();
-					osw=null;
-				} catch (IOException e) {
-					e.printStackTrace();
-				} 
-			}
-			if(out!=null){
-				try {
-					out.close();
-					out=null;
-				} catch (IOException e) {
-					e.printStackTrace();
-				} 
-			}
 		}
 	}
 
@@ -500,7 +522,7 @@ public class CNRouter extends ActiveRouter {
 			genData.outTodatOneNumInt(bw, "du_num", this.du_num);
 			genData.outTodatOneNumDouble(bw, "calCap_j", sent_cu_router.curCapacity);
 			genData.outTodatOneNumDouble(bw, "calCap_k", recv_cu_router.curCapacity);
-			genData.outTodatOneNumInt(bw, "rho", this.rho);
+			genData.outTodatOneNumDouble(bw, "rho", this.rho);
 			genData.outTodatOneNumDouble(bw, "epsilon_j", sent_cu_router.epsilon);
 			genData.outTodatOneNumDouble(bw, "epsilon_k", recv_cu_router.epsilon);
 			Double min_rate = Math.min(sent_cu_router.CU_Rates.get(recv_cu_router.getHost()),
@@ -511,8 +533,8 @@ public class CNRouter extends ActiveRouter {
 			double[] x_ik_param = new double[this.du_num];
 			for (DTNHost du : sent_cu_router.X_Param.keySet()) {
 				int du_id = du.getAddress();
-				x_ij_param[du_id] = sent_cu_router.X_Param.get(du);
-				x_ik_param[du_id] = recv_cu_router.X_Param.get(du);
+				x_ij_param[du_id] = sent_cu_router.X_Param.get(du);//j
+				x_ik_param[du_id] = recv_cu_router.X_Param.get(du);//k
 				if(x_ij_param[du_id] <= 0) x_ij_param[du_id] = 0;
 				if(x_ik_param[du_id] <= 0) x_ik_param[du_id] = 0;
 			}
@@ -542,41 +564,20 @@ public class CNRouter extends ActiveRouter {
 			genData.outTodatOneDimensionDouble(bw, "eta_k", eta_k_param);
 
 			bw.append("end;").append("\r");
+			
+			bw.close();bw=null;
+			osw.close();osw=null;
+			out.close();out=null;
 		} catch (Exception e) {
 			e.printStackTrace();
-		}finally{
-			if(bw!=null){
-				try {
-					bw.close();
-					bw=null;
-				} catch (IOException e) {
-					e.printStackTrace();
-				} 
-			}
-			if(osw!=null){
-				try {
-					osw.close();
-					osw=null;
-				} catch (IOException e) {
-					e.printStackTrace();
-				} 
-			}
-			if(out!=null){
-				try {
-					out.close();
-					out=null;
-				} catch (IOException e) {
-					e.printStackTrace();
-				} 
-			}
 		}
 	}
 	//	----------------------------------------------------------------------------------------------------------------
 	
-	//------------------------------------------Get Variable From Ampl------------------------------------------
-	
+	//------------------------------------------Get Variable From Ampl------------------------------------------	
 	public void getOneDimensionVarFromAmpl(Variable xij_Var, double[] doubleValue) {
 		int index_xj = 0;
+		//System.out.println(xij_Var);
 		for (int i = 0; i < this.du_num; i++) {
 			Object[] df = xij_Var.getValues().getRowByIndex(index_xj++);
 			double tempD = Double.valueOf(df[1] == null ? "" : df[1].toString()).doubleValue();

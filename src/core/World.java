@@ -57,6 +57,9 @@ public class World {
 	private ScheduledUpdatesQueue scheduledUpdates;
 	private boolean simulateConOnce;
 
+	
+	public double runUntil = 0;
+	
 	/**
 	 * Constructor.
 	 */
@@ -148,7 +151,7 @@ public class World {
 	 * this method is called and after one update interval.
 	 */
 	public void update () {
-		double runUntil = SimClock.getTime() + this.updateInterval;
+		 this.runUntil = SimClock.getTime() + this.updateInterval;
 
 		setNextEventQueue();
 

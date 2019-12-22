@@ -2,9 +2,16 @@
 Scenario.name = CCD_scenario
 Scenario.simulateConnections = true
 ###############################更新周期
-Scenario.updateInterval = 0.5 
+Scenario.updateInterval = 1
 ###############################仿真时长
-Scenario.endTime = 10000
+Scenario.endTime = 100
+
+############需更改参数###############
+#DU Group : DU_num, Data_Arrival, Init_mu, Epsilon
+#CU Group: CU_Num, Omega, CapacityPool
+#CN Group: DU_num, CU_num, rho
+#图多大
+####################################
 
 # Interface Settings
 Interface.type = SimpleBroadcastInterface
@@ -24,13 +31,14 @@ Group1.interface1 = Interface
 
 Group1.router = DURouter 
 ##################################DU num
-Group1.nrofHosts = 20
-#################################一列double值, 代表 数据到来速率 池, 数值用逗号隔开 --To do
-DURouter.DataArrivalRatePool = 100, 300
+Group1.nrofHosts = 4
+#################################一列double值, 代表 数据到来速率 池, 数值用逗号隔开 --To do 10,15,20
+DURouter.DataArrivalRatePool = 15
 # ###############################mu_queuelen --To do
-DURouter.Init_muQueueLen = 10.0
+DURouter.Init_muQueueLen = 30.0
 ################################epsilon 随机梯度更新步长
-DURouter.Epsilon = 0.001
+DURouter.Epsilon = 0.2
+DURouter.HatEpsilon = 0.2
 
 
 #-------------------------------------------------------------------------------------CU group
@@ -42,13 +50,21 @@ Group2.nrofInterfaces = 1
 Group2.interface1 = Interface
 Group2.router = CURouter
 ###############################CU num
-Group2.nrofHosts = 5
-###############################Omega
-CURouter.Omega = 0.8 
+Group2.nrofHosts = 2
+###############################Omega(0.2-0.5)
+CURouter.Omega = 0.2
 ###############################最大计算能力 --To do
-CURouter.MaxCapacityPool = 100
-
-
+CURouter.MaxCapacityPool = 20, 300
+##################################传输速率
+#DU,CU
+CURouter.DU_TransRateDownBound = 40, 10
+CURouter.DU_TransRateUpBound = 80, 40
+CURouter.CU_TransRate = 160, 200
+##################################开销
+#DU2CU
+CURouter.DU2CU_TransCost = 2
+CURouter.CU2CU_TransCost = 7
+CURouter.CU_CalCost = 5
 
 #-------------------------------------------------------------------------------------CN group
 Group3.groupID = N
@@ -58,22 +74,25 @@ Group3.speed = 0, 0
 Group3.nrofInterfaces = 1
 Group3.interface1 = Interface
 
-Group3.router = CNRouter 
 Group3.nrofHosts = 1
 
-################################rho ：cycles/sec  --To do
-CNRouter.App_rho = 12
+#改动6次(Report里头两次)
+# CNRouter !!!!!! CNRouter_CUSelf !!!!!!!!! CNRouter_DU_FIX!!!!!!CNRouter_CUFullConn!!!!CNRouter_Adapt
+Group3.router = CNRouter_Adapt
+################################rho ：cycles/sec  --To do 4.82
+CNRouter_Adapt.App_rho = 3.7
 ################################Group1.nrofHosts DU个数
-CNRouter.DU_Num = 20
+CNRouter_Adapt.DU_Num = 4
 ################################Group2.nrofHosts CU个数
-CNRouter.CU_Num = 5
+CNRouter_Adapt.CU_Num = 2
 
 
+#-------------------------------------------------------------------------------------Other Settings
 ## Movement model settings
 # seed for movement models' pseudo random number generator (default = 0)
-MovementModel.rngSeed = 1
+MovementModel.rngSeed = 2
 # World's size for Movement Models without implicit size (width, height; meters)
-###################################图多大 --To do
+#####################################图多大 --To do
 MovementModel.worldSize = 4500, 3400
 
 ## Message creation parameters
